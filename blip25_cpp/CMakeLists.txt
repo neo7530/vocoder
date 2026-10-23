@@ -16,6 +16,10 @@ add_library(b25 STATIC
   src/decode.cpp
   src/encode.cpp
   src/engine.cpp
+  src/fec.cpp
+  src/wire_tables.cpp
+  src/wire.cpp
+  src/vocoder.cpp
 )
 target_include_directories(b25 PUBLIC include)
 # The engine relies on two's-complement wrapping for plain + - * on signed
@@ -30,7 +34,10 @@ option(B25_BOUNDS_CHECK "bounds-checked spans (libstdc++ assertions) in tests" O
 
 add_executable(ref_dump_test test/ref_dump_test.cpp)
 target_link_libraries(ref_dump_test PRIVATE b25)
+add_executable(golden_corpus_test test/golden_corpus_test.cpp)
+target_link_libraries(golden_corpus_test PRIVATE b25)
 if(B25_BOUNDS_CHECK AND NOT MSVC)
   target_compile_definitions(b25 PRIVATE _GLIBCXX_ASSERTIONS)
   target_compile_definitions(ref_dump_test PRIVATE _GLIBCXX_ASSERTIONS)
+  target_compile_definitions(golden_corpus_test PRIVATE _GLIBCXX_ASSERTIONS)
 endif()
