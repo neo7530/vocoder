@@ -41,6 +41,27 @@ its externals are fetched by CMake. No python3/unzip/xxd/curl are needed.
 - Windows x64: `build_windows.bat` -> `build-windows/qso_dmr_vocoder.dll`
 - Android arm64: `build_android.bat` (NDK 27, arm64-v8a) -> `build-android/libqso_dmr_vocoder.so`
 
+## Firmware-free backend: `-DQDV_BACKEND=b25` (2026-10-23)
+
+The same `qdv_*` ABI can be built over the portable C++ blip25 codec in `blip25_cpp/`
+instead of the MD380 firmware under dynarmic: no firmware files, no dynarmic, no
+Boost, `qdv_init(NULL, NULL)` succeeds. Default stays `dynarmic`.
+
+    cmake -S . -B build -DQDV_BACKEND=b25 && cmake --build build
+
+Differences you will see: `qdv_unwrap_md380` returns `QDV_ERR_UNSUPPORTED` (12, new,
+additive); `qdv_decode_fec` corrects Golay errors and feeds the count to concealment
+(the firmware path does not); `qdv_decode` reads all 49 bits (the firmware path reads
+48). About 0.2 ms CPU per 20 ms encode+decode frame on x86-64.
+
+Checked without the firmware, by `b25_crosscheck` (needs no firmware): the 9-byte
+frames of the 2971-frame DMRGateway prompt decode with 0 FEC errors (so the wire
+format is the real DMR one), and encoder/decoder interoperate with the independent
+mbelib coder in both directions. NOT checked: sample-level agreement with the MD380
+firmware's output, since the firmware cannot be redistributed. Do that comparison with
+`qdv_test` against both backends before shipping. See `blip25_cpp/README.md` and
+`blip25_cpp/PATENT_NOTICE.md` (AMBE+2 patents, MIT grants no patent rights).
+
 ## D-Star and P25 codecs: the helper's "dv" mode (2026-10-05)
 
 The bundled helper executable also carries the D-Star (AMBE 3600x2400 with

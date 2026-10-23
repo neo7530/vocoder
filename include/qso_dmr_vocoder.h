@@ -47,7 +47,9 @@ typedef enum {
     QDV_ERR_CORE_READ      = 8, /* core file read failed                        */
     QDV_ERR_UNWRAP_OPEN    = 9, /* wrapped OEM firmware could not be opened/read */
     QDV_ERR_UNWRAP_FORMAT  = 10,/* wrapped OEM firmware header/size not valid   */
-    QDV_ERR_UNWRAP_WRITE   = 11 /* unwrapped output could not be written        */
+    QDV_ERR_UNWRAP_WRITE   = 11,/* unwrapped output could not be written        */
+    QDV_ERR_UNSUPPORTED    = 12 /* not available in this backend (the firmware-free
+                                   blip25 backend has no firmware to unwrap)    */
 } qdv_status;
 
 /* Returns QDV_ABI_VERSION the module was built with. Call before anything else

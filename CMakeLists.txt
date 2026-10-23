@@ -15,8 +15,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Codec backend. "dynarmic" (default): MD380 firmware under the dynarmic JIT, firmware
+# loaded at runtime. "b25": portable C++ blip25 codec in blip25_cpp/, no firmware, no
+# dynarmic, no Boost.
+set(QDV_BACKEND "dynarmic" CACHE STRING "qdv_* codec backend: dynarmic or b25")
+set_property(CACHE QDV_BACKEND PROPERTY STRINGS dynarmic b25)
+
 include(FetchContent)
 
+if(QDV_BACKEND STREQUAL "dynarmic")
 # Pinned to the exact commit the spike resolved to (was GIT_TAG master there).
 set(DYNARMIC_TESTS OFF CACHE BOOL "")
 set(DYNARMIC_USE_ARMV7 ON CACHE BOOL "")
@@ -54,20 +61,36 @@ else()
     message(STATUS "xbyak legacy-AMD divide-by-zero patch already applied")
 endif()
 
-add_library(qso_dmr_vocoder SHARED
-    third_party/md380_vocoder_dynarmic/md380_vocoder.cpp
-    src/firmware_runtime.cpp
-    src/md380_unwrap.cpp
-    src/qdv_abi.cpp
-)
-target_include_directories(qso_dmr_vocoder
-    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/md380_vocoder_dynarmic
-)
+endif()
+
+if(QDV_BACKEND STREQUAL "b25")
+    add_subdirectory(blip25_cpp EXCLUDE_FROM_ALL)
+    # keep the codec's internals out of the module's exported symbols (only qdv_*)
+    set_target_properties(b25 PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+    set(QDV_BACKEND_SRC src/qdv_b25.cpp)
+    set(QDV_BACKEND_LIBS b25)
+    set(QDV_BACKEND_INC "")
+elseif(QDV_BACKEND STREQUAL "dynarmic")
+    set(QDV_BACKEND_SRC
+        third_party/md380_vocoder_dynarmic/md380_vocoder.cpp
+        src/firmware_runtime.cpp
+        src/md380_unwrap.cpp
+        src/qdv_abi.cpp)
+    set(QDV_BACKEND_LIBS dynarmic)
+    set(QDV_BACKEND_INC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/md380_vocoder_dynarmic)
+else()
+    message(FATAL_ERROR "QDV_BACKEND must be dynarmic or b25")
+endif()
+
+add_library(qso_dmr_vocoder SHARED ${QDV_BACKEND_SRC})
+target_include_directories(qso_dmr_vocoder PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+if(QDV_BACKEND_INC)
+    target_include_directories(qso_dmr_vocoder PRIVATE ${QDV_BACKEND_INC})
+endif()
 # QDV_BUILDING -> dllexport on Windows. Only qdv_* (QDV_API / visibility
-# default) are exported; everything else (md380_*, dynarmic) stays internal.
+# default) are exported; everything else (md380_*, dynarmic, b25) stays internal.
 target_compile_definitions(qso_dmr_vocoder PRIVATE QDV_BUILDING=1)
-target_link_libraries(qso_dmr_vocoder PRIVATE dynarmic)
+target_link_libraries(qso_dmr_vocoder PRIVATE ${QDV_BACKEND_LIBS})
 set_target_properties(qso_dmr_vocoder PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
@@ -143,20 +166,23 @@ if(MSVC)
     target_compile_definitions(dv_test PRIVATE _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS _ALLOW_KEYWORD_MACROS)
 endif()
 
+if(QDV_BACKEND STREQUAL "b25")
+    # Firmware-free interoperability check against the vendored mbelib coder.
+    add_executable(b25_crosscheck test/b25_crosscheck.cpp)
+    target_include_directories(b25_crosscheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${QDV_DS} ${QDV_DS}/mbe ${QDV_DS}/imbe_vocoder)
+    target_link_libraries(b25_crosscheck PRIVATE qso_dmr_vocoder qso_dv_codecs)
+    set_target_properties(b25_crosscheck PROPERTIES CXX_STANDARD 17)
+endif()
+
 if(ANDROID OR WIN32)
-    add_executable(qso_dmr_vocoder_helper
-        src/helper_main.cpp
-        third_party/md380_vocoder_dynarmic/md380_vocoder.cpp
-        src/firmware_runtime.cpp
-        src/md380_unwrap.cpp
-        src/qdv_abi.cpp
-    )
-    target_include_directories(qso_dmr_vocoder_helper
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/md380_vocoder_dynarmic
-    )
+    add_executable(qso_dmr_vocoder_helper src/helper_main.cpp ${QDV_BACKEND_SRC})
+    target_include_directories(qso_dmr_vocoder_helper PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    if(QDV_BACKEND_INC)
+        target_include_directories(qso_dmr_vocoder_helper PRIVATE ${QDV_BACKEND_INC})
+    endif()
     target_compile_definitions(qso_dmr_vocoder_helper PRIVATE QDV_BUILDING=1)
-    target_link_libraries(qso_dmr_vocoder_helper PRIVATE dynarmic qso_dv_codecs)
+    target_link_libraries(qso_dmr_vocoder_helper PRIVATE ${QDV_BACKEND_LIBS} qso_dv_codecs)
     if(ANDROID)
         # PIE .so named lib* so Android packages + extracts it with exec permission.
         set_target_properties(qso_dmr_vocoder_helper PROPERTIES
