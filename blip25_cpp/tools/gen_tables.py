@@ -12,7 +12,7 @@ TYPES = {"i16": "int16_t", "u16": "uint16_t", "i32": "int32_t", "u32": "uint32_t
 
 src = open(sys.argv[1]).read()
 base, ns = sys.argv[2], sys.argv[3]
-pat = re.compile(r"((?:[ \t]*///[^\n]*\n)*)[ \t]*pub (?:const|static) ([A-Z0-9_]+): \[(\w+); ([^\]]+)\] = \[(.*?)\];", re.S)
+pat = re.compile(r"((?:[ \t]*///[^\n]*\n)*)[ \t]*pub(?:\(crate\))? (?:const|static) ([A-Za-z0-9_]+): \[(\w+); ([^\]]+)\] = \[(.*?)\];", re.S)
 decl, defn = [], []
 for m in pat.finditer(src):
     doc, name, ty, n, body = m.groups()
@@ -29,7 +29,7 @@ for m in pat.finditer(src):
     doc_c = "".join("// " + l.strip()[3:].strip() + "\n" for l in doc.splitlines())
     decl.append(f"{doc_c}extern const {c} {name}[{n_c}];")
     defn.append(f"const {c} {name}[{n_c}] = {{\n{body}\n}};")
-SC = re.compile(r"^[ \t]*pub const ([A-Z0-9_]+): (usize|i16|u16|i32|u32) = ([^;\n]+);", re.M)
+SC = re.compile(r"^(?:pub )?const ([A-Z0-9_]+): (usize|i16|u16|i32|u32) = ([^;\n]+);", re.M)
 scalars = []
 for m in SC.finditer(src):
     name, ty, expr = m.groups()

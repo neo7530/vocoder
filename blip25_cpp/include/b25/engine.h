@@ -65,4 +65,25 @@ class Decoder {
   Mode mode_;
 };
 
+constexpr usz ENC_STATE_WORDS = 0xb80;
+
+class Encoder {
+ public:
+  explicit Encoder(Mode mode);
+  Mode mode() const { return mode_; }
+  usz payload_bits() const { return eng::payload_bits(mode_); }
+  void reset();
+
+  // pcm: FRAME_SAMPLES samples; payload: at least payload_bits() entries, one bit per i16.
+  // Output lags the input by one frame of encoder delay.
+  Frame encode(CS16 pcm, S16 payload);
+
+  CS16 state_words() const { return CS16(state_); }
+
+ private:
+  std::array<i16, ENC_STATE_WORDS> state_{};
+  std::array<i16, BITS_WORDS> bits_{};
+  Mode mode_;
+};
+
 }  // namespace b25::eng

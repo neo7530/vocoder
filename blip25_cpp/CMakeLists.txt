@@ -11,8 +11,10 @@ add_library(b25 STATIC
   src/engine_tables.cpp
   src/dsp_tables.cpp
   src/decode_tables.cpp
+  src/encode_tables.cpp
   src/dsp.cpp
   src/decode.cpp
+  src/encode.cpp
   src/engine.cpp
 )
 target_include_directories(b25 PUBLIC include)
